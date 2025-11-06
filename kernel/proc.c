@@ -539,7 +539,25 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
+
+  // Increment time used in current queue
+  p->time_in_queue++;
+
+  // Check if time allotment exceeded
+  if(p->time_in_queue >= time_allotment[p->queue_level]) {
+    // Demote to lower priority (if not already lowest)
+    if(p->queue_level < NMLFQ - 1) {
+      p->queue_level++;
+    }
+    p->time_in_queue = 0;
+  }
+
   p->state = RUNNABLE;
+
+  // Re-enqueue to appropriate queue
+  p->state = RUNNABLE;
+  mlfq_enqueue(p, p->queue_level);
+
   sched();
   release(&p->lock);
 }

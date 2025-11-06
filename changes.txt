@@ -12,3 +12,6 @@ MLFQ  enqueue, dequeue, remove
 
 5 proc.c (scheduler)
 Fetch process from MLFQ
+
+6 proc.c (yield)
+Modified yield to implement MLFQ
