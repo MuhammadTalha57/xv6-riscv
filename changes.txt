@@ -6,3 +6,6 @@ MLFQ Configs
 
 3 proc.c   defs.h   main.c
 mlfq_init()   include   call
+
+4 proc.c
+MLFQ  enqueue, dequeue, remove
