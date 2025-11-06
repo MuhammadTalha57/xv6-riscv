@@ -143,6 +143,11 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  // MLFQ Fields
+  p->queue_level = 0; // Start at highest priority
+  p->time_in_queue = 0;
+  p->next = 0;
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);

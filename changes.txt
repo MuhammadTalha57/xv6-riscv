@@ -19,3 +19,5 @@ Modified yield to implement MLFQ
 7. 
 Defined priority boost
 Changed timer interrupt handling
+
+8. Changed process allocation
