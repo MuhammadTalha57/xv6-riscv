@@ -238,6 +238,29 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmfree(pagetable, sz);
 }
 
+// Enqueue process to specified queue
+void
+mlfq_enqueue(struct proc *p, int queue)
+{
+  acquire(&mlfq[queue].lock);
+  
+  p->next = 0;
+  p->queue_level = queue;
+  p->time_in_queue = 0;  // Reset time in new queue
+  
+  if(mlfq[queue].tail) {
+    mlfq[queue].tail->next = p;
+  } else {
+    mlfq[queue].head = p;
+  }
+  mlfq[queue].tail = p;
+  
+  release(&mlfq[queue].lock);
+}
+
+
+
+
 // Set up first user process.
 void
 userinit(void)
@@ -250,6 +273,9 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+
+  // Add this process to MLFQ
+  mlfq_enqueue(p, 0);
 
   release(&p->lock);
 }
@@ -342,6 +368,37 @@ reparent(struct proc *p)
     }
   }
 }
+
+// Remove specific process from its queue (for sleep/exit)
+void
+mlfq_remove(struct proc *p)
+{
+  int queue = p->queue_level;
+  acquire(&mlfq[queue].lock);
+  
+  struct proc *curr = mlfq[queue].head;
+  struct proc *prev = 0;
+  
+  while(curr) {
+    if(curr == p) {
+      if(prev)
+        prev->next = curr->next;
+      else
+        mlfq[queue].head = curr->next;
+      
+      if(mlfq[queue].tail == curr)
+        mlfq[queue].tail = prev;
+      
+      p->next = 0;
+      break;
+    }
+    prev = curr;
+    curr = curr->next;
+  }
+  
+  release(&mlfq[queue].lock);
+}
+
 
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
@@ -441,6 +498,28 @@ kwait(uint64 addr)
     sleep(p, &wait_lock);  //DOC: wait-sleep
   }
 }
+
+
+// Dequeue process from specified queue
+struct proc*
+mlfq_dequeue(int queue)
+{
+  acquire(&mlfq[queue].lock);
+  
+  struct proc *p = mlfq[queue].head;
+  if(p) {
+    mlfq[queue].head = p->next;
+    if(mlfq[queue].head == 0)
+      mlfq[queue].tail = 0;
+    p->next = 0;
+  }
+  
+  release(&mlfq[queue].lock);
+  return p;
+}
+
+
+
 
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -546,6 +625,8 @@ sched(void)
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
+
+
 
 // Give up the CPU for one scheduling round.
 void
@@ -786,73 +867,7 @@ mlfq_init(void)
   }
 }
 
-// Enqueue process to specified queue
-void
-mlfq_enqueue(struct proc *p, int queue)
-{
-  acquire(&mlfq[queue].lock);
-  
-  p->next = 0;
-  p->queue_level = queue;
-  p->time_in_queue = 0;  // Reset time in new queue
-  
-  if(mlfq[queue].tail) {
-    mlfq[queue].tail->next = p;
-  } else {
-    mlfq[queue].head = p;
-  }
-  mlfq[queue].tail = p;
-  
-  release(&mlfq[queue].lock);
-}
 
-// Dequeue process from specified queue
-struct proc*
-mlfq_dequeue(int queue)
-{
-  acquire(&mlfq[queue].lock);
-  
-  struct proc *p = mlfq[queue].head;
-  if(p) {
-    mlfq[queue].head = p->next;
-    if(mlfq[queue].head == 0)
-      mlfq[queue].tail = 0;
-    p->next = 0;
-  }
-  
-  release(&mlfq[queue].lock);
-  return p;
-}
-
-// Remove specific process from its queue (for sleep/exit)
-void
-mlfq_remove(struct proc *p)
-{
-  int queue = p->queue_level;
-  acquire(&mlfq[queue].lock);
-  
-  struct proc *curr = mlfq[queue].head;
-  struct proc *prev = 0;
-  
-  while(curr) {
-    if(curr == p) {
-      if(prev)
-        prev->next = curr->next;
-      else
-        mlfq[queue].head = curr->next;
-      
-      if(mlfq[queue].tail == curr)
-        mlfq[queue].tail = prev;
-      
-      p->next = 0;
-      break;
-    }
-    prev = curr;
-    curr = curr->next;
-  }
-  
-  release(&mlfq[queue].lock);
-}
 
 
 void
