@@ -481,6 +481,10 @@ scheduler(void)
       // Run This Process
       p->state = RUNNING; 
       c->proc = p;
+      
+      printf("Running PID %d from queue %d (time: %d/%d)\n",
+       p->pid, p->queue_level, p->time_in_queue,
+       time_allotment[p->queue_level]);
 
       swtch(&c->context, &p->context);
 
