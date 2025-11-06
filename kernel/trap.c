@@ -81,8 +81,21 @@ usertrap(void)
     kexit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2) {
+
+    // Update global tick counter
+    acquire(&mlfq_lock);
+    ticks_since_boost++;
+
+    // Check if boost interval reached
+    if(ticks_since_boost >= BOOST_INTERVAL) {
+      mlfq_priority_boost();
+      ticks_since_boost = 0;
+    }
+    release(&mlfq_lock);
+
     yield();
+  }
 
   prepare_return();
 

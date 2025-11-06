@@ -15,3 +15,7 @@ Fetch process from MLFQ
 
 6 proc.c (yield)
 Modified yield to implement MLFQ
+
+7. 
+Defined priority boost
+Changed timer interrupt handling

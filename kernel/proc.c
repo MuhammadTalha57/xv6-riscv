@@ -8,7 +8,7 @@
 
 // MLFQ Configuration
 #define NMLFQ 4                 // Number of Queues
-#define BOOST_INTERVAL 100      // Priority boost every 100 ticks
+int BOOST_INTERVAL = 100;      // Priority boost every 100 ticks
 
 // Time allotments per queue (in timer ticks)
 int time_allotment[NMLFQ] = {1, 2, 4, 8};
@@ -21,7 +21,7 @@ struct {
 } mlfq[NMLFQ];
 
 // Global State
-int time_since_boost = 0;
+int ticks_since_boost = 0;
 struct spinlock mlfq_lock;
 
 struct cpu cpus[NCPU];
@@ -830,4 +830,32 @@ mlfq_remove(struct proc *p)
   }
   
   release(&mlfq[queue].lock);
+}
+
+
+void
+mlfq_priority_boost(void)
+{
+  // Move all processes to highest priority queue
+  struct proc *p;
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    
+    if(p->state == RUNNABLE || p->state == RUNNING) {
+      // Remove from current queue
+      if(p->state == RUNNABLE)
+        mlfq_remove(p);
+      
+      // Reset to top queue
+      p->queue_level = 0;
+      p->time_in_queue = 0;
+      
+      // Re-enqueue if runnable
+      if(p->state == RUNNABLE)
+        mlfq_enqueue(p, 0);
+    }
+    
+    release(&p->lock);
+  }
 }
