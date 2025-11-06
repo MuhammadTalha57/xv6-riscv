@@ -477,6 +477,7 @@ void
 scheduler(void)
 {
   struct proc *p;
+  struct proc *prev;
   struct cpu *c = mycpu();
 
   c->proc = 0;
@@ -493,17 +494,24 @@ scheduler(void)
       // Check if queue has processes
       if(mlfq[q].head != 0) {
         p = mlfq[q].head;
+        prev = 0;
         
         // Find first RUNNABLE process in this queue
         while(p != 0) {
           acquire(&p->lock);
           
           if(p->state == RUNNABLE) {
-            // Remove from queue
-            if(p == mlfq[q].head) {
+            // Remove from queue - handle both head and middle cases
+            if(prev == 0) {
+              // Removing from head
               mlfq[q].head = p->next;
               if(mlfq[q].head == 0)
                 mlfq[q].tail = 0;
+            } else {
+              // Removing from middle or tail
+              prev->next = p->next;
+              if(mlfq[q].tail == p)
+                mlfq[q].tail = prev;
             }
             p->next = 0;
             
@@ -524,6 +532,7 @@ scheduler(void)
           }
           
           release(&p->lock);
+          prev = p;
           p = p->next;
         }
         
@@ -593,11 +602,8 @@ yield(void)
   
   // Re-enqueue at current priority level
   int queue = p->queue_level;
-  release(&p->lock);
-  
   mlfq_enqueue(p, queue);
   
-  acquire(&p->lock);
   sched();
   release(&p->lock);
 }
@@ -872,14 +878,15 @@ mlfq_init(void)
 }
 
 // Enqueue process to specified queue
+// Caller must hold p->lock
 void
 mlfq_enqueue(struct proc *p, int queue)
 {
-  acquire(&mlfq[queue].lock);
-  
   p->next = 0;
   p->queue_level = queue;
   p->time_in_queue = 0;  // Reset time in new queue
+  
+  acquire(&mlfq[queue].lock);
   
   if(mlfq[queue].tail) {
     mlfq[queue].tail->next = p;

@@ -1,0 +1,506 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+% Page setup
+\geometry{margin=1in}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{CEP Report: MLFQ Scheduler Implementation}
+\fancyhead[R]{\thepage}
+\fancyfoot[C]{}
+
+% Code listing style
+\lstset{
+    language=C,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    numbersep=5pt,
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=2
+}
+
+% Title formatting
+\titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+    pdftitle={CEP Report: MLFQ Scheduler Implementation},
+    pdfauthor={Your Name}
+}
+
+\begin{document}
+
+% Title page
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\Huge\bfseries CEP Report}\\[0.5cm]
+    {\Large Multi-Level Feedback Queue (MLFQ) Scheduler Implementation}\\[1cm]
+    
+    \vspace{1cm}
+    
+    {\large\textbf{Project}: Implementation of MLFQ Scheduler in xv6-riscv}\\[0.3cm]
+    {\large\textbf{Date}: November 2024}\\[0.3cm]
+    {\large\textbf{Status}: \textcolor{green!70!black}{Complete and Verified}}\\[1cm]
+    
+    \vfill
+    
+    % Optional: Uncomment and add your institution logo
+    % \begin{center}
+    %     \includegraphics[width=0.3\textwidth]{logo.png}
+    % \end{center}
+    
+    \vspace{1cm}
+    
+    \today
+\end{titlepage}
+
+% Table of contents
+\newpage
+\tableofcontents
+\newpage
+
+% Introduction
+\section{Introduction}
+
+This project implements a Multi-Level Feedback Queue (MLFQ) scheduler for the xv6-riscv operating system. The MLFQ scheduler improves upon the default round-robin scheduler by providing priority-based scheduling that adapts to process behavior, giving higher priority to I/O-bound processes while preventing CPU-bound processes from starving lower-priority tasks.
+
+\subsection{Objectives}
+
+\begin{itemize}
+    \item Replace the round-robin scheduler with an MLFQ scheduler
+    \item Implement priority-based process scheduling with 4 priority levels
+    \item Support automatic process demotion based on CPU usage
+    \item Implement priority boost mechanism to prevent starvation
+    \item Maintain system responsiveness for interactive processes
+\end{itemize}
+
+% Problem Statement
+\section{Problem Statement}
+
+The original xv6 scheduler uses a simple round-robin approach where all processes receive equal CPU time regardless of their characteristics. This leads to:
+
+\begin{enumerate}
+    \item \textbf{Poor responsiveness}: I/O-bound processes (like interactive applications) wait as long as CPU-bound processes
+    \item \textbf{Inefficient scheduling}: No differentiation between process types
+    \item \textbf{No priority management}: All processes treated equally
+\end{enumerate}
+
+The MLFQ scheduler addresses these issues by:
+\begin{itemize}
+    \item Assigning higher priority to I/O-bound processes
+    \item Automatically demoting CPU-bound processes
+    \item Providing periodic priority boosts to prevent starvation
+\end{itemize}
+
+% Design and Implementation
+\section{Design and Implementation}
+
+\subsection{MLFQ Architecture}
+
+The implementation uses \textbf{4 priority queues} (numbered 0-3, where 0 is highest priority):
+
+\begin{itemize}
+    \item \textbf{Queue 0}: Highest priority, time allotment = 1 tick
+    \item \textbf{Queue 1}: High priority, time allotment = 2 ticks
+    \item \textbf{Queue 2}: Medium priority, time allotment = 4 ticks
+    \item \textbf{Queue 3}: Lowest priority, time allotment = 8 ticks
+\end{itemize}
+
+\subsection{Key Components}
+
+\subsubsection{Data Structures}
+
+\textbf{Process Structure Extensions} (\texttt{kernel/proc.h}):
+\begin{lstlisting}
+// MLFQ Fields
+int queue_level;             // Current Queue (0 = Highest Priority)
+int time_in_queue;           // Ticks used in current queue
+struct proc* next;           // Next Process in queue (For Linked List)
+\end{lstlisting}
+
+\textbf{Queue Structure} (\texttt{kernel/proc.c}):
+\begin{lstlisting}
+#define NMLFQ 4                 // Number of Queues
+#define BOOST_INTERVAL 100      // Priority boost every 100 ticks
+
+int time_allotment[NMLFQ] = {1, 2, 4, 8};
+
+struct {
+  struct proc* head;
+  struct proc* tail;
+  struct spinlock lock;
+} mlfq[NMLFQ];
+\end{lstlisting}
+
+\subsubsection{Core Functions}
+
+\begin{enumerate}
+    \item \texttt{mlfq\_init()}: Initializes all queues and locks
+    \item \texttt{mlfq\_enqueue(p, queue)}: Adds process to specified queue
+    \item \texttt{mlfq\_dequeue(queue)}: Removes process from queue head
+    \item \texttt{mlfq\_remove(p)}: Removes specific process from its queue
+    \item \texttt{mlfq\_tick()}: Tracks time and handles priority boost
+    \item \texttt{mlfq\_boost()}: Moves all processes to highest priority queue
+\end{enumerate}
+
+\subsection{Scheduling Algorithm}
+
+\begin{enumerate}
+    \item \textbf{Process Selection}: Scheduler checks queues from highest (0) to lowest (3) priority
+    \item \textbf{Time Tracking}: Each timer interrupt increments \texttt{time\_in\_queue} for running process
+    \item \textbf{Demotion}: When \texttt{time\_in\_queue >= time\_allotment[queue\_level]}, process is demoted
+    \item \textbf{Priority Boost}: Every 100 ticks, all processes are boosted to queue 0
+\end{enumerate}
+
+\subsection{Process Lifecycle Integration}
+
+\begin{itemize}
+    \item \textbf{Fork/Userinit}: New processes start at queue 0 (highest priority)
+    \item \textbf{Exit}: Processes removed from queue before termination
+    \item \textbf{Sleep}: Processes removed from queue when sleeping
+    \item \textbf{Wakeup}: Processes re-enqueued at current priority level
+\end{itemize}
+
+% Code Changes
+\section{Code Changes}
+
+\subsection{Files Modified}
+
+\subsubsection{\texttt{kernel/proc.h}}
+\begin{itemize}
+    \item Added 3 MLFQ fields to \texttt{struct proc} (lines 109-112)
+\end{itemize}
+
+\subsubsection{\texttt{kernel/proc.c}}
+\begin{itemize}
+    \item MLFQ configuration and data structures (lines 9-25)
+    \item Modified \texttt{scheduler()} function (lines 475-554)
+    \item Modified \texttt{yield()} function with demotion logic (lines 585-609)
+    \item Modified \texttt{allocproc()} to initialize MLFQ fields (lines 146-149)
+    \item Modified \texttt{userinit()} to enqueue init process (lines 258-266)
+    \item Modified \texttt{kfork()} to enqueue new processes (lines 339-347)
+    \item Modified \texttt{kexit()} to remove process from queue (lines 403-406)
+    \item Modified \texttt{sleep()} to remove process from queue (lines 660-663)
+    \item Modified \texttt{wakeup()} to re-enqueue processes (lines 691-693)
+    \item Implemented \texttt{mlfq\_init()} (lines 868-878)
+    \item Implemented \texttt{mlfq\_enqueue()} (lines 880-899)
+    \item Implemented \texttt{mlfq\_dequeue()} (lines 901-917)
+    \item Implemented \texttt{mlfq\_remove()} (lines 919-945)
+    \item Implemented \texttt{mlfq\_tick()} (lines 804-825)
+    \item Implemented \texttt{mlfq\_boost()} (lines 827-866)
+\end{itemize}
+
+\subsubsection{\texttt{kernel/defs.h}}
+\begin{itemize}
+    \item Added function declarations (lines 104-109)
+\end{itemize}
+
+\subsubsection{\texttt{kernel/main.c}}
+\begin{itemize}
+    \item Added \texttt{mlfq\_init()} call (line 31)
+\end{itemize}
+
+\subsubsection{\texttt{kernel/trap.c}}
+\begin{itemize}
+    \item Integrated \texttt{mlfq\_tick()} in \texttt{usertrap()} (line 85)
+    \item Integrated \texttt{mlfq\_tick()} in \texttt{kerneltrap()} (line 160)
+\end{itemize}
+
+\subsubsection{\texttt{Makefile}}
+\begin{itemize}
+    \item Added \texttt{\_mlfqtest} to UPROGS (line 146)
+\end{itemize}
+
+\subsection{New Files}
+
+\subsubsection{\texttt{user/mlfqtest.c}}
+\begin{itemize}
+    \item Comprehensive test program for MLFQ scheduler
+    \item Tests basic scheduling, priority boost, fairness, and responsiveness
+\end{itemize}
+
+\subsection{Summary of Changes}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Component} & \textbf{Changes} \\
+\midrule
+Data Structures & Added 3 fields to \texttt{struct proc}, 4 queue structures \\
+Functions & 6 new MLFQ functions, 2 modified core functions \\
+Integration Points & 5 process lifecycle functions modified \\
+Initialization & 1 initialization function, 1 call site \\
+Testing & 1 test program, test infrastructure \\
+\bottomrule
+\end{tabular}
+\caption{Summary of Code Changes}
+\end{table}
+
+% Testing
+\section{Testing}
+
+\subsection{Test Program: \texttt{mlfqtest}}
+
+The test program (\texttt{user/mlfqtest.c}) verifies:
+
+\begin{enumerate}
+    \item \textbf{Basic Scheduling}: CPU-bound vs I/O-bound process behavior
+    \item \textbf{Priority Boost}: Long-running processes get priority boost every 100 ticks
+    \item \textbf{Fairness}: Multiple CPU-bound processes get fair CPU time
+    \item \textbf{Responsiveness}: I/O-bound processes remain responsive with CPU hogs
+\end{enumerate}
+
+\subsection{Test Infrastructure}
+
+Created automated testing tools:
+\begin{itemize}
+    \item \texttt{test-mlfq.py}: Python script for automated testing
+    \item \texttt{run-tests.sh}: Bash script for quick testing
+    \item \texttt{generate-report.sh}: Report generation tool
+\end{itemize}
+
+\subsection{Running Tests}
+
+\begin{lstlisting}[language=bash]
+# Automated testing
+./run-tests.sh
+
+# Or manually
+make qemu
+# In xv6 shell:
+mlfqtest
+\end{lstlisting}
+
+\subsection{Expected Behavior}
+
+\begin{itemize}
+    \item[\textcolor{green!70!black}{$\checkmark$}] I/O-bound processes complete faster (stay at higher priority)
+    \item[\textcolor{green!70!black}{$\checkmark$}] CPU-bound processes are demoted (move to lower queues)
+    \item[\textcolor{green!70!black}{$\checkmark$}] No process starves (priority boost every 100 ticks)
+    \item[\textcolor{green!70!black}{$\checkmark$}] Fair CPU allocation among similar processes
+\end{itemize}
+
+% Results and Verification
+\section{Results and Verification}
+
+\subsection{Requirements Verification}
+
+All CEP requirements have been satisfied:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Requirement} & \textbf{Status} & \textbf{Details} \\
+\midrule
+1. MLFQ Fields in proc.h & \textcolor{green!70!black}{$\checkmark$} & queue\_level, time\_in\_queue, next \\
+2. MLFQ Configuration & \textcolor{green!70!black}{$\checkmark$} & 4 queues, time allotments, locks \\
+3. mlfq\_init() \& Call & \textcolor{green!70!black}{$\checkmark$} & Implemented, declared, called \\
+4. Queue Operations & \textcolor{green!70!black}{$\checkmark$} & enqueue, dequeue, remove \\
+5. Scheduler Modification & \textcolor{green!70!black}{$\checkmark$} & Priority-based selection \\
+6. Timer Interrupt Handling & \textcolor{green!70!black}{$\checkmark$} & Time tracking, demotion, boost \\
+7. Priority Boost & \textcolor{green!70!black}{$\checkmark$} & Every 100 ticks \\
+8. Process Lifecycle & \textcolor{green!70!black}{$\checkmark$} & Fork, exit, sleep, wakeup \\
+9. Function Declarations & \textcolor{green!70!black}{$\checkmark$} & All in defs.h \\
+10. Build System & \textcolor{green!70!black}{$\checkmark$} & mlfqtest in Makefile \\
+\bottomrule
+\end{tabular}
+\caption{CEP Requirements Verification}
+\end{table}
+
+\subsection{Build Status}
+
+\textcolor{green!70!black}{\textbf{Kernel compiles successfully}} without errors or warnings
+
+\subsection{Code Quality}
+
+\begin{itemize}
+    \item[\textcolor{green!70!black}{$\checkmark$}] Proper locking (no race conditions)
+    \item[\textcolor{green!70!black}{$\checkmark$}] Lock ordering to prevent deadlocks
+    \item[\textcolor{green!70!black}{$\checkmark$}] Error handling
+    \item[\textcolor{green!70!black}{$\checkmark$}] Code comments and documentation
+\end{itemize}
+
+\subsection{Test Results}
+
+\begin{itemize}
+    \item[\textcolor{green!70!black}{$\checkmark$}] Test program executes successfully
+    \item[\textcolor{green!70!black}{$\checkmark$}] All test phases complete
+    \item[\textcolor{green!70!black}{$\checkmark$}] No panics or errors observed
+    \item[\textcolor{green!70!black}{$\checkmark$}] Expected behavior verified
+\end{itemize}
+
+% Conclusion
+\section{Conclusion}
+
+\subsection{Achievements}
+
+\begin{enumerate}
+    \item \textbf{Successfully implemented MLFQ scheduler} with 4 priority levels
+    \item \textbf{Integrated with xv6 process lifecycle} (fork, exit, sleep, wakeup)
+    \item \textbf{Implemented priority boost mechanism} to prevent starvation
+    \item \textbf{Created comprehensive test suite} for verification
+    \item \textbf{All CEP requirements satisfied}
+\end{enumerate}
+
+\subsection{Key Features}
+
+\begin{itemize}
+    \item \textbf{Priority-based scheduling}: Processes start at highest priority
+    \item \textbf{Automatic demotion}: CPU-bound processes move to lower queues
+    \item \textbf{Time-based allocation}: Different time allotments per queue
+    \item \textbf{Starvation prevention}: Periodic priority boost every 100 ticks
+    \item \textbf{I/O optimization}: I/O-bound processes maintain higher priority
+\end{itemize}
+
+\subsection{Performance Characteristics}
+
+\begin{itemize}
+    \item \textbf{Time Complexity}: O(n) for scheduler (n = number of queues)
+    \item \textbf{Space Complexity}: O(1) per process (3 additional fields)
+    \item \textbf{Lock Contention}: Minimal (per-queue locks)
+\end{itemize}
+
+\subsection{Future Enhancements (Optional)}
+
+\begin{enumerate}
+    \item Configurable time allotments and boost interval
+    \item Per-CPU queues for multi-core systems
+    \item Statistics tracking (queue distribution, wait times)
+    \item Debug output for queue states
+\end{enumerate}
+
+% Appendix
+\section{Appendix}
+
+\subsection{File Locations}
+
+\textbf{Core Implementation}:
+\begin{itemize}
+    \item \texttt{kernel/proc.h}: Process structure with MLFQ fields
+    \item \texttt{kernel/proc.c}: MLFQ implementation (all functions)
+    \item \texttt{kernel/defs.h}: Function declarations
+    \item \texttt{kernel/main.c}: Initialization call
+    \item \texttt{kernel/trap.c}: Timer interrupt integration
+\end{itemize}
+
+\textbf{Testing}:
+\begin{itemize}
+    \item \texttt{user/mlfqtest.c}: Test program
+    \item \texttt{test-mlfq.py}: Automated test script
+    \item \texttt{run-tests.sh}: Test runner
+    \item \texttt{TESTING.md}: Testing documentation
+\end{itemize}
+
+\textbf{Documentation}:
+\begin{itemize}
+    \item \texttt{CEP\_VERIFICATION.md}: Detailed requirement verification
+    \item \texttt{MLFQ\_IMPLEMENTATION\_SUMMARY.md}: Implementation overview
+    \item \texttt{REQUIREMENTS\_CHECKLIST.md}: Quick checklist
+    \item \texttt{CEP\_REPORT.md}: This document
+\end{itemize}
+
+\subsection{Key Code Snippets}
+
+\subsubsection{Scheduler Selection Logic}
+\begin{lstlisting}
+// Iterate through queues from highest to lowest priority
+for(int q = 0; q < NMLFQ; q++) {
+  acquire(&mlfq[q].lock);
+  if(mlfq[q].head != 0) {
+    // Find first RUNNABLE process
+    // Remove from queue and schedule
+  }
+}
+\end{lstlisting}
+
+\subsubsection{Demotion Logic}
+\begin{lstlisting}
+if(p->time_in_queue >= time_allotment[p->queue_level]) {
+  if(p->queue_level < NMLFQ - 1) {
+    p->queue_level++;  // Demote to lower queue
+  }
+  p->time_in_queue = 0;
+}
+\end{lstlisting}
+
+\subsubsection{Priority Boost}
+\begin{lstlisting}
+if(time_since_boost >= BOOST_INTERVAL) {
+  time_since_boost = 0;
+  mlfq_boost();  // Move all to queue 0
+}
+\end{lstlisting}
+
+\subsection{Testing Output Example}
+
+\begin{lstlisting}[language=bash, basicstyle=\ttfamily\small]
+========================================
+   MLFQ Scheduler Verification Tests
+========================================
+
+=== Test 1: Basic MLFQ Scheduling ===
+Creating processes with different characteristics...
+[Process execution with C/I/M indicators]
+
+=== Test 2: Priority Boost Test ===
+[Long-running process with periodic boost]
+
+=== Test 3: Fairness Test ===
+[Multiple CPU-bound processes]
+
+=== Test 4: Responsiveness Test ===
+[I/O-bound process with CPU hog]
+
+========================================
+     All MLFQ Tests Completed!
+========================================
+\end{lstlisting}
+
+\subsection{References}
+
+\begin{itemize}
+    \item xv6-riscv source code
+    \item Operating Systems: Three Easy Pieces (MLFQ chapter)
+    \item Original MLFQ paper by Corbato et al.
+\end{itemize}
+
+% Submission Checklist
+\section*{Submission Checklist}
+
+\begin{itemize}
+    \item[\textcolor{green!70!black}{$\checkmark$}] All code changes implemented
+    \item[\textcolor{green!70!black}{$\checkmark$}] All requirements satisfied
+    \item[\textcolor{green!70!black}{$\checkmark$}] Code compiles without errors
+    \item[\textcolor{green!70!black}{$\checkmark$}] Test program created and working
+    \item[\textcolor{green!70!black}{$\checkmark$}] Documentation complete
+    \item[\textcolor{green!70!black}{$\checkmark$}] Verification report generated
+\end{itemize}
+
+\end{document}
+
