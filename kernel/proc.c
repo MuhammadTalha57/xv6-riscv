@@ -378,6 +378,11 @@ kexit(int status)
   
   acquire(&p->lock);
 
+  // Remove from MLFQ queue if runnable
+  if(p->state == RUNNABLE) 
+    mlfq_remove(p);
+
+
   p->xstate = status;
   p->state = ZOMBIE;
 
