@@ -9,3 +9,6 @@ mlfq_init()   include   call
 
 4 proc.c
 MLFQ  enqueue, dequeue, remove
+
+5 proc.c (scheduler)
+Fetch process from MLFQ

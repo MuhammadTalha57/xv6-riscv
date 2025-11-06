@@ -456,23 +456,49 @@ scheduler(void)
     intr_off();
 
     int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+    // Finding The Next Process To Run
+    for(int i = 0; i < NMLFQ; i++) {
+      if(mlfq[i].head != 0) {
         found = 1;
+        p = mlfq_dequeue(i);
+        break;
       }
+    }
+
+    if(found == 1) {
+      acquire(&p->lock);
+      // Run This Process
+      p->state = RUNNING; 
+      c->proc = p;
+
+      swtch(&c->context, &p->context);
+
+      // Process Returned
+
       release(&p->lock);
     }
+
+    // for(p = proc; p < &proc[NPROC]; p++) {
+    //   acquire(&p->lock);
+    //   if(p->state == RUNNABLE) {
+    //     // Switch to chosen process.  It is the process's job
+    //     // to release its lock and then reacquire it
+    //     // before jumping back to us.
+    //     p->state = RUNNING;
+    //     c->proc = p;
+    //     swtch(&c->context, &p->context);
+
+    //     // Process is done running for now.
+    //     // It should have changed its p->state before coming back.
+    //     c->proc = 0;
+    //     found = 1;
+    //   }
+    //   release(&p->lock);
+    // }
+
+
+
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
       asm volatile("wfi");
