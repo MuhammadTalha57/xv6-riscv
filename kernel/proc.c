@@ -6,6 +6,24 @@
 #include "proc.h"
 #include "defs.h"
 
+// MLFQ Configuration
+#define NMLFQ 4                 // Number of Queues
+#define BOOST_INTERVAL 100      // Priority boost every 100 ticks
+
+// Time allotments per queue (in timer ticks)
+int time_allotment[NMLFQ] = {1, 2, 4, 8};
+
+// Queue Heads (Circuar Linked Lists)
+struct {
+  struct proc* head;
+  struct proc* tail;
+  struct spinlock lock;
+} mlfq[NMLFQ];
+
+// Global State
+int time_since_boost = 0;
+struct spinlock mlfq_lock;
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
