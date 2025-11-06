@@ -3,3 +3,6 @@ MLFQ Fields
 
 2 proc.c
 MLFQ Configs
+
+3 proc.c   defs.h   main.c
+mlfq_init()   include   call

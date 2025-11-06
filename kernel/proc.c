@@ -706,3 +706,16 @@ procdump(void)
     printf("\n");
   }
 }
+
+
+// Initialize MLFQ
+void
+mlfq_init(void)
+{
+  initlock(&mlfq_lock, "mlfq");
+  for(int i = 0; i < NMLFQ; i++) {
+    mlfq[i].head = 0;
+    mlfq[i].tail = 0;
+    initlock(&mlfq[i].lock, "mlfq_queue");
+  }
+}
