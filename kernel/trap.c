@@ -37,6 +37,7 @@ trapinithart(void)
 uint64
 usertrap(void)
 {
+  printf("USER INTERRUPT\n");
   int which_dev = 0;
 
   if((r_sstatus() & SSTATUS_SPP) != 0)
@@ -82,6 +83,7 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
+    printf("Timer interrupt - yielding PID %d\n", p->pid);
 
     // Update global tick counter
     acquire(&mlfq_lock);

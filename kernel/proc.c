@@ -265,10 +265,14 @@ mlfq_enqueue(struct proc *p, int queue)
 void
 userinit(void)
 {
+
+  printf("Adding User Process\n");
   struct proc *p;
 
   p = allocproc();
   initproc = p;
+
+  printf("User Process Allocated (pid: %d)\n", p->pid);
   
   p->cwd = namei("/");
 
@@ -549,35 +553,62 @@ scheduler(void)
     // Finding The Next Process To Run
     for(int i = 0; i < NMLFQ; i++) {
       if(mlfq[i].head != 0) {
-        found = 1;
         p = mlfq_dequeue(i);
+
+        if(p == 0) continue;
+
+        found = 1;
         break;
       }
     }
 
     if(found == 1) {
       acquire(&p->lock);
-      // Run This Process
-      p->state = RUNNING; 
-      c->proc = p;
-      
-      printf("Running PID %d from queue %d (time: %d/%d)\n",
-       p->pid, p->queue_level, p->time_in_queue,
-       time_allotment[p->queue_level]);
 
-      swtch(&c->context, &p->context);
+      if(p->state == RUNNABLE) {
+        // Run This Process
+        p->state = RUNNING; 
+        c->proc = p;
+        
+        printf("Running PID %d from queue %d (time: %d/%d)\n",
+        p->pid, p->queue_level, p->time_in_queue,
+        time_allotment[p->queue_level]);
 
-      // Process Returned
+        swtch(&c->context, &p->context);
+
+        printf("Context Switched - PID %d returned\n", p->pid);
+        // Process Returned
+
+        c->proc = 0;
+
+      }
+      else {
+        // Process is no longer runnable (might have exited or slept)
+          printf("PID %d no longer RUNNABLE (state=%d)\n", p->pid, p->state);
+      }
 
       release(&p->lock);
     }
+    else {
+      printf("NO Runnable Process found");
+    }
 
+    // int prio = NPROC;
+    // // struct proc* newProc = 0;
     // for(p = proc; p < &proc[NPROC]; p++) {
     //   acquire(&p->lock);
     //   if(p->state == RUNNABLE) {
     //     // Switch to chosen process.  It is the process's job
     //     // to release its lock and then reacquire it
     //     // before jumping back to us.
+
+    //     if(p->queue_level < prio) {
+    //       prio = p->queue_level;
+    //       // newProc = p;
+    //       found = 1;
+    //     }
+        
+    //     continue;
     //     p->state = RUNNING;
     //     c->proc = p;
     //     swtch(&c->context, &p->context);
@@ -588,7 +619,26 @@ scheduler(void)
     //     found = 1;
     //   }
     //   release(&p->lock);
+
     // }
+    
+
+    if(found == 1) {
+      // acquire(&newProc->lock);
+  
+      // newProc->state = RUNNING;
+      // c->proc = p;
+      // swtch(&c->context, &newProc->context);
+  
+      // // Process is done running for now.
+      // // It should have changed its p->state before coming back.
+      // c->proc = 0;
+      // // found = 1;
+  
+      // release(&newProc->lock);
+
+    }
+
 
 
 
