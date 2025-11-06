@@ -21,3 +21,5 @@ Defined priority boost
 Changed timer interrupt handling
 
 8. Changed process allocation
+
+9. Changed Sleep and Wakeup

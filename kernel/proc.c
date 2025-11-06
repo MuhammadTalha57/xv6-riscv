@@ -621,6 +621,10 @@ sleep(void *chan, struct spinlock *lk)
   acquire(&p->lock);  //DOC: sleeplock1
   release(lk);
 
+  // Remove from MLFQ queue
+  mlfq_remove(p);
+
+
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
@@ -647,6 +651,10 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+
+        // Add back to MLFQ at current priority level
+        mlfq_enqueue(p, p->queue_level);
+
       }
       release(&p->lock);
     }
