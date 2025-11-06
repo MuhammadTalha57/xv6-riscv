@@ -102,10 +102,11 @@ int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 void            mlfq_init(void);
-void            mlfq_priority_boost(void);
-extern struct spinlock mlfq_lock;
-extern int ticks_since_boost;
-extern int BOOST_INTERVAL;
+void            mlfq_enqueue(struct proc*, int);
+struct proc*    mlfq_dequeue(int);
+void            mlfq_remove(struct proc*);
+void            mlfq_tick(void);
+void            mlfq_boost(void);
 
 // swtch.S
 void            swtch(struct context*, struct context*);

@@ -83,20 +83,9 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2) {
-    printf("Timer interrupt - yielding PID %d\n", p->pid);
-
-    // Update global tick counter
-    acquire(&mlfq_lock);
-    ticks_since_boost++;
-
-    // Check if boost interval reached
-    if(ticks_since_boost >= BOOST_INTERVAL) {
-      mlfq_priority_boost();
-      ticks_since_boost = 0;
-    }
-    release(&mlfq_lock);
-
+    mlfq_tick();
     yield();
+
   }
 
   prepare_return();
@@ -167,8 +156,16 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0)
+
+  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING) {
+    mlfq_tick();  // Track time and handle priority boost
     yield();
+  }
+
+  // if(which_dev == 2 && myproc() != 0) {
+  //   mlfq_tick();
+  //   yield();
+  // }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
