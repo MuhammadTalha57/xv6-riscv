@@ -107,3 +107,28 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_getprocinfo(void)
+{
+  int pid;
+  uint64 addr;
+  struct procinfo info;
+
+  // Get the pid argument
+  argint(0, &pid);
+  
+  // Get the address where to write the procinfo structure
+  argaddr(1, &addr);
+
+  // Get process info using kernel helper function
+  if(getprocinfo_kernel(pid, &info) < 0) {
+    return -1;  // Process not found
+  }
+  
+  // Copy the info structure to user space
+  if(copyout(myproc()->pagetable, addr, (char *)&info, sizeof(info)) < 0)
+    return -1;
+  
+  return 0;  // Success
+}

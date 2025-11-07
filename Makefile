@@ -146,6 +146,8 @@ UPROGS=\
 	$U/_cpubound\
 	$U/_iobound\
 	$U/_runboth\
+	$U/_procinfo\
+	$U/_perftest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

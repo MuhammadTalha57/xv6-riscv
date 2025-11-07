@@ -2,6 +2,14 @@
 
 struct stat;
 
+// Process performance information
+struct procinfo {
+  int pid;                     // Process ID
+  unsigned long cpu_ticks;     // Total CPU ticks consumed
+  unsigned long sched_count;   // Number of times scheduled
+  char name[16];               // Process name
+};
+
 // system calls
 int fork(void);
 int exit(int) __attribute__((noreturn));
@@ -24,6 +32,7 @@ int getpid(void);
 char* sys_sbrk(int,int);
 int pause(int);
 int uptime(void);
+int getprocinfo(int, struct procinfo*);
 
 // ulib.c
 int stat(const char*, struct stat*);

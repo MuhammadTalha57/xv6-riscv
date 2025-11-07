@@ -4,6 +4,7 @@ struct file;
 struct inode;
 struct pipe;
 struct proc;
+struct procinfo;
 struct spinlock;
 struct sleeplock;
 struct stat;
@@ -107,6 +108,7 @@ struct proc*    mlfq_dequeue(int);
 void            mlfq_remove(struct proc*);
 void            mlfq_tick(void);
 void            mlfq_boost(void);
+int             getprocinfo_kernel(int, struct procinfo*);
 
 // swtch.S
 void            swtch(struct context*, struct context*);

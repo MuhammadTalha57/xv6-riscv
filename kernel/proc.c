@@ -148,6 +148,10 @@ found:
   p->time_in_queue = 0;
   p->next = 0;
 
+  // Initialize performance tracking fields
+  p->cpu_ticks = 0;
+  p->sched_count = 0;
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -196,6 +200,10 @@ freeproc(struct proc *p)
   p->queue_level = 0;
   p->time_in_queue = 0;
   p->next = 0;
+  
+  // Clear performance tracking fields
+  p->cpu_ticks = 0;
+  p->sched_count = 0;
   
   p->state = UNUSED;
 }
@@ -513,6 +521,9 @@ scheduler(void)
             p->state = RUNNING;
             c->proc = p;
             
+            // Increment schedule count
+            p->sched_count++;
+            
             swtch(&c->context, &p->context);
             
             // Process is done running
@@ -734,6 +745,29 @@ killed(struct proc *p)
   return k;
 }
 
+// Get performance information for a process
+int
+getprocinfo_kernel(int pid, struct procinfo *info)
+{
+  struct proc *p;
+  
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->pid == pid) {
+      // Found the process, copy its info
+      info->pid = p->pid;
+      info->cpu_ticks = p->cpu_ticks;
+      info->sched_count = p->sched_count;
+      memmove(info->name, p->name, sizeof(p->name));
+      release(&p->lock);
+      return 0;  // Success
+    }
+    release(&p->lock);
+  }
+  
+  return -1;  // Process not found
+}
+
 // Copy to either a user address, or kernel address,
 // depending on usr_dst.
 // Returns 0 on success, -1 on error.
@@ -803,6 +837,7 @@ mlfq_tick(void)
   if(p != 0 && p->state == RUNNING) {
     acquire(&p->lock);
     p->time_in_queue++;
+    p->cpu_ticks++;  // Increment CPU ticks for performance tracking
     release(&p->lock);
   }
   

@@ -18,6 +18,15 @@ struct context {
   uint64 s11;
 };
 
+// Process performance information
+struct procinfo {
+  int pid;                     // Process ID
+  uint64 cpu_ticks;            // Total CPU ticks consumed
+  uint64 sched_count;          // Number of times scheduled
+  char name[16];               // Process name
+};
+
+
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
@@ -110,4 +119,8 @@ struct proc {
   int queue_level;             // Current Queue (0 = Highest Priority)
   int time_in_queue;           // Ticks used in current queue
   struct proc* next;           // Next Process in queue (For Linked List)
+
+  // Performance tracking fields
+  uint64 cpu_ticks;            // Total CPU ticks consumed
+  uint64 sched_count;          // Number of times scheduled
 };
