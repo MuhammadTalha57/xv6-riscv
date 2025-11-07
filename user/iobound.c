@@ -21,7 +21,10 @@ main(int argc, char *argv[])
   }
   
   // Perform many I/O operations
-  for(i = 0; i < 1000; i++) {
+  // Max file size in xv6: 268 blocks * 1024 bytes = ~274KB
+  // Using 512-byte writes: 274432 / 512 = ~536 blocks max
+  // Use 500 iterations to stay well within limit
+  for(i = 0; i < 500; i++) {
     // Fill buffer with data
     memset(buf, 'A' + (i % 26), sizeof(buf));
     
@@ -47,7 +50,7 @@ main(int argc, char *argv[])
     exit(1);
   }
   
-  for(i = 0; i < 1000; i++) {
+  for(i = 0; i < 500; i++) {
     if(read(fd, buf, sizeof(buf)) != sizeof(buf)) {
       printf("Error: read failed\n");
       close(fd);
