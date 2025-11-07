@@ -148,6 +148,7 @@ UPROGS=\
 	$U/_runboth\
 	$U/_procinfo\
 	$U/_perftest\
+	$U/_compareperf\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

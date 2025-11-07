@@ -517,6 +517,11 @@ scheduler(void)
             
             release(&mlfq[q].lock);
             
+            // Print MLFQ visualization
+            // printf("[MLFQ] Scheduled: %s (PID:%d) Queue[%d] | TotalTicks:%ld | SchedCount:%ld | Allotment:%d\n", 
+            //        p->name, p->pid, q, p->cpu_ticks, p->sched_count, time_allotment[q]);
+
+            
             // Switch to chosen process
             p->state = RUNNING;
             c->proc = p;
@@ -591,12 +596,21 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   
+  // Print current state before checking/resetting
+  // printf("[MLFQ] Yield: %s (PID:%d) Queue[%d] | TimeInQueue:%d/%d\n", 
+  //        p->name, p->pid, p->queue_level, p->time_in_queue, time_allotment[p->queue_level]);
+  
   // Check if process exceeded time allotment
   if(p->time_in_queue >= time_allotment[p->queue_level]) {
     // Demote to lower priority queue (if not already at lowest)
     if(p->queue_level < NMLFQ - 1) {
+      // int old_queue = p->queue_level;
       p->queue_level++;
+      // printf("[MLFQ] Demoting: %s (PID:%d) Queue[%d]->Queue[%d] | Used %d ticks\n", 
+      //        p->name, p->pid, old_queue, p->queue_level, p->time_in_queue);
     }
+    // printf("[RESETTING] time_in_queue for %s (PID:%d)\n", 
+    //        p->name, p->pid);
     p->time_in_queue = 0;
   }
   
@@ -832,12 +846,30 @@ procdump(void)
 void
 mlfq_tick(void)
 {
+  // printf("[CALLED MLFQ TICK] Tick\n");
   struct proc *p = myproc();
+  
+  // Debug: Check if mlfq_tick is being called
+  static int tick_count = 0;
+  tick_count++;
+  if(tick_count % 50 == 0) {
+    // printf("[DEBUG] mlfq_tick called %d times, current proc: %s (state=%d)\n", 
+    //        tick_count, p ? p->name : "NULL", p ? p->state : -1);
+  }
   
   if(p != 0 && p->state == RUNNING) {
     acquire(&p->lock);
     p->time_in_queue++;
+    // printf("TIME INCREMENTED for %s (PID:%d): time_in_queue=%d\n", 
+    //        p->name, p->pid, p->time_in_queue);
     p->cpu_ticks++;  // Increment CPU ticks for performance tracking
+    
+    // Debug: Print every 10 ticks to see if it's incrementing
+    if(p->time_in_queue % 10 == 0) {
+      // printf("[DEBUG] %s (PID:%d) Queue[%d] time_in_queue=%d (limit=%d)\n", 
+      //        p->name, p->pid, p->queue_level, p->time_in_queue, time_allotment[p->queue_level]);
+    }
+    
     release(&p->lock);
   }
   
@@ -847,6 +879,7 @@ mlfq_tick(void)
   
   // Priority boost: move all processes to highest queue
   if(time_since_boost >= BOOST_INTERVAL) {
+    // printf("[MLFQ] *** PRIORITY BOOST *** Moving all processes to Queue[0]\n");
     time_since_boost = 0;
     mlfq_boost();
   }
